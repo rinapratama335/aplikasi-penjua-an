@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Redirect } from "react-router-dom";
 // import styles from "./index.module.css";
 
 // Import komponen material ui
@@ -14,7 +14,13 @@ import useStyles from "./style";
 
 //Import validator
 import isEmail from "validator/lib/isEmail";
+
+// Import Firebase Hooks untuk simpan data
+import { useFirebase } from "../../components/FirebaseProvider";
+import AppLoading from "../../components/AppLoading";
+
 function Registrasi() {
+  const { auth, user, loading } = useFirebase();
   const classes = useStyles();
 
   const [form, setForm] = useState({
@@ -42,13 +48,17 @@ function Registrasi() {
     password: "",
     ulangi_password: "",
   });
+
+  //State untuk loading
+  const [isSubmitting, setSubmitting] = useState(false);
+
   const validate = () => {
     const newError = { ...error };
 
     if (!email) {
       newError.email = "Email harus diisi";
     } else if (!isEmail(email)) {
-      newError.emial = "Email tidak valid";
+      newError.email = "Email tidak valid";
     }
 
     if (!password) {
@@ -57,23 +67,61 @@ function Registrasi() {
 
     if (!ulangi_password) {
       newError.ulangi_password = "Ulangi password wajib diisi";
-    } else if (ulangi_password != password) {
+    } else if (ulangi_password !== password) {
       newError.ulangi_password = "Ulangi password tidak valid";
     }
 
     return newError;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     //Panggil fungsi validate
     const findErrors = validate();
 
-    if (Object.keys(findErrors).some((err) => err != "")) {
+    if (Object.values(findErrors).some((err) => err !== "")) {
       setError(findErrors);
+    } else {
+      try {
+        setSubmitting(true);
+        await auth.createUserWithEmailAndPassword(email, password);
+      } catch (e) {
+        const newError = {};
+
+        // Handle error code
+        switch (e.code) {
+          case "auth/email-already-in-use":
+            newError.email = "Email sudah terdaftar";
+            break;
+          case "auth/invalid-email":
+            newError.email = "Email tidak valid";
+            break;
+          case "auth/weak-password":
+            newError.password = "Password lemah";
+            break;
+          case "auth/operation-not-allowed":
+            newError.email = "Metode email dan password tidak didukung";
+            break;
+          default:
+            newError.email = "Terjadi kesalahan, silahkan coba lagi";
+            break;
+        }
+
+        setError(newError);
+        setSubmitting(false);
+      }
     }
   };
+
+  if (loading) {
+    return <AppLoading />;
+  }
+  if (user) {
+    return <Redirect to="/" />;
+  }
+
+  console.log("Data User : ", user);
 
   return (
     <Container maxWidth="xs">
@@ -94,6 +142,7 @@ function Registrasi() {
             onChange={handleChange}
             helperText={error.email}
             error={error.email ? true : false}
+            disabled={isSubmitting}
           />
           <TextField
             id="password"
@@ -107,6 +156,7 @@ function Registrasi() {
             onChange={handleChange}
             helperText={error.password}
             error={error.password ? true : false}
+            disabled={isSubmitting}
           />
           <TextField
             id="ulangi_password"
@@ -120,11 +170,13 @@ function Registrasi() {
             onChange={handleChange}
             helperText={error.ulangi_password}
             error={error.ulangi_password ? true : false}
+            disabled={isSubmitting}
           />
 
           <Grid container className={classes.buttons}>
             <Grid item xs>
               <Button
+                disabled={isSubmitting}
                 type="submit"
                 color="primary"
                 variant="contained"
@@ -136,6 +188,7 @@ function Registrasi() {
             </Grid>
             <Grid item>
               <Button
+                disabled={isSubmitting}
                 component={Link}
                 to="/login"
                 variant="contained"
